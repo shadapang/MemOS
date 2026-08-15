@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import os
 
 from typing import Any
@@ -274,6 +274,7 @@ class MOSMCPServer:
             user_id: str | None = None,
             cube_ids: list[str] | None = None,
             filter: dict[str, Any] | None = None,
+            top_k: int | None = None,
         ) -> dict[str, Any]:
             """
             Search for memories across user's accessible memory cubes.
@@ -294,7 +295,7 @@ class MOSMCPServer:
                 # Some MCP clients always send filter:{} in conversation mode; treat it as no filter
                 if not filter:
                     filter = None
-                result = self.mos_core.search(query, user_id, cube_ids)
+                result = self.mos_core.search(query, user_id, cube_ids, top_k=top_k)
                 return result
             except Exception as e:
                 import traceback
@@ -338,6 +339,39 @@ class MOSMCPServer:
             except Exception as e:
                 return f"Error adding memory: {e!s}"
 
+        @self.mcp.tool()
+        async def get_all_memories(
+            cube_id: str | None = None, user_id: str | None = None
+        ) -> dict[str, Any]:
+            """
+            Get all textual memories from a memory cube.
+
+            This method returns the complete list of textual memories in the
+            specified cube (or the user's default cube if not provided).
+
+            Args:
+                cube_id (str, optional): Target cube ID. If not provided, uses user's default cube
+                user_id (str, optional): User ID for access validation. If not provided, uses default user
+
+            Returns:
+                dict: Search-style result with text_mem containing all memories
+            """
+            try:
+                result = self.mos_core.get_all(mem_cube_id=cube_id, user_id=user_id)
+                for group in result.get("text_mem", []):
+                    group["memories"] = [
+                        {
+                            "id": getattr(m, "id", ""),
+                            "memory": getattr(m, "memory", str(m)),
+                            "metadata": getattr(m, "metadata", None),
+                        }
+                        for m in group.get("memories", [])
+                    ]
+                return result
+            except Exception as e:
+                import traceback
+
+                return {"error": str(e), "traceback": traceback.format_exc()}
         @self.mcp.tool()
         async def get_memory(
             cube_id: str, memory_id: str, user_id: str | None = None
